@@ -66,6 +66,9 @@ dependencies:
   # For opening phone dialer and other apps
   android_intent_plus: ^4.0.3
 
+  # For camera preview realtime
+  camera: ^0.10.5+9
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

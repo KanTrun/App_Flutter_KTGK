@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:translator/translator.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:image_picker/image_picker.dart';
+// ignore: import_of_legacy_library_into_null_safe
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';

@@ -3,6 +3,8 @@ import 'screens/personal_screen.dart';
 import 'screens/youtube_player_screen.dart';
 import 'screens/alarm_clock_screen.dart';
 import 'screens/translation_screen.dart';
+import 'screens/info_screen.dart';
+import 'screens/cam_real_screen.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -19,6 +21,8 @@ class _MainNavigationState extends State<MainNavigation> {
     const YouTubePlayerScreen(),
     const AlarmClockScreen(),
     const TranslationScreen(),
+    InfoScreen(),
+    const CamRealScreen(),
   ];
 
   final List<BottomNavigationBarItem> _navItems = [
@@ -37,6 +41,14 @@ class _MainNavigationState extends State<MainNavigation> {
     const BottomNavigationBarItem(
       icon: Icon(Icons.translate),
       label: 'Dịch văn bản',
+    ),
+    const BottomNavigationBarItem(
+      icon: Icon(Icons.info),
+      label: 'Thông tin',
+    ),
+    const BottomNavigationBarItem(
+      icon: Icon(Icons.videocam),
+      label: 'CamReal',
     ),
   ];
 
