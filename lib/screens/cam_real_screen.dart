@@ -20,6 +20,8 @@ class _CamRealScreenState extends State<CamRealScreen> {
   String _realtimeText = '';
   String _realtimeTranslatedText = '';
   bool _isRealtimeTranslating = false;
+  String _lastTranslatedText = '';
+  DateTime? _lastTranslateTime;
   final TextRecognizer _textRecognizer = TextRecognizer();
   final GoogleTranslator _translator = GoogleTranslator();
   bool _isVietnameseToEnglish = true; // Cho phép chuyển hướng dịch
@@ -46,29 +48,47 @@ class _CamRealScreenState extends State<CamRealScreen> {
     if (_cameraController == null) return;
     _cameraController!.startImageStream((CameraImage image) async {
       if (_isRealtimeTranslating) return;
+      // Throttle: chỉ dịch mỗi 600ms
+      final now = DateTime.now();
+      if (_lastTranslateTime != null && now.difference(_lastTranslateTime!).inMilliseconds < 600) return;
+      _lastTranslateTime = now;
       _isRealtimeTranslating = true;
       try {
-        // Chuyển CameraImage sang InputImage (MLKit 0.13.x expects InputImageMetadata)
-        final WriteBuffer allBytes = WriteBuffer();
-        for (final Plane plane in image.planes) {
-          allBytes.putUint8List(plane.bytes);
+        // Chỉ xử lý nếu đúng định dạng YUV420 (Android)
+        if (image.format.group != ImageFormatGroup.yuv420) {
+          _isRealtimeTranslating = false;
+          return;
         }
-        final bytes = allBytes.done().buffer.asUint8List();
+        // Chuyển CameraImage (YUV420) sang NV21
+        final int width = image.width;
+        final int height = image.height;
+        final int uvRowStride = image.planes[1].bytesPerRow;
+        final int uvPixelStride = image.planes[1].bytesPerPixel!;
+        final bytes = Uint8List(width * height + (width * height) ~/ 2);
+        int index = 0;
+        // Y plane
+        for (int y = 0; y < height; y++) {
+          for (int x = 0; x < width; x++) {
+            bytes[index++] = image.planes[0].bytes[y * image.planes[0].bytesPerRow + x];
+          }
+        }
+        // UV planes (VU interleaved)
+        for (int y = 0; y < height ~/ 2; y++) {
+          for (int x = 0; x < width ~/ 2; x++) {
+            int uIndex = y * uvRowStride + x * uvPixelStride;
+            int vIndex = y * uvRowStride + x * uvPixelStride;
+            bytes[index++] = image.planes[2].bytes[vIndex]; // V
+            bytes[index++] = image.planes[1].bytes[uIndex]; // U
+          }
+        }
         final camera = _cameras![0];
-        final imageRotation = InputImageRotationValue.fromRawValue(camera.sensorOrientation) ?? InputImageRotation.rotation0deg;
-        final inputImageFormat = InputImageFormatValue.fromRawValue(image.format.raw) ?? InputImageFormat.nv21;
         final metadata = InputImageMetadata(
-          size: Size(image.width.toDouble(), image.height.toDouble()),
-          rotation: imageRotation,
-          format: inputImageFormat,
-          bytesPerRow: image.planes.first.bytesPerRow,
+          size: Size(width.toDouble(), height.toDouble()),
+          rotation: InputImageRotationValue.fromRawValue(camera.sensorOrientation) ?? InputImageRotation.rotation0deg,
+          format: InputImageFormat.nv21,
+          bytesPerRow: image.planes[0].bytesPerRow,
         );
         final inputImage = InputImage.fromBytes(bytes: bytes, metadata: metadata);
-
-        setState(() {
-          _realtimeText = 'Đang nhận diện...';
-          _realtimeTranslatedText = '';
-        });
 
         final RecognizedText recognizedText = await _textRecognizer.processImage(inputImage);
         String text = recognizedText.text.trim();
@@ -76,7 +96,9 @@ class _CamRealScreenState extends State<CamRealScreen> {
           _realtimeText = text.isNotEmpty ? text : '(Không nhận diện được văn bản)';
         });
 
-        if (text.isNotEmpty) {
+        // Chỉ dịch nếu text khác lần trước và không rỗng
+        if (text.isNotEmpty && text != _lastTranslatedText) {
+          _lastTranslatedText = text;
           String fromLang = _isVietnameseToEnglish ? 'vi' : 'en';
           String toLang = _isVietnameseToEnglish ? 'en' : 'vi';
           try {
@@ -89,10 +111,6 @@ class _CamRealScreenState extends State<CamRealScreen> {
               _realtimeTranslatedText = 'Lỗi dịch: $e';
             });
           }
-        } else {
-          setState(() {
-            _realtimeTranslatedText = '';
-          });
         }
       } catch (e) {
         setState(() {
@@ -156,11 +174,43 @@ class _CamRealScreenState extends State<CamRealScreen> {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(_realtimeText, style: const TextStyle(fontSize: 16)),
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 80),
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: SingleChildScrollView(
+                        child: SelectableText(
+                          _realtimeText,
+                          style: const TextStyle(fontSize: 16),
+                          maxLines: 4,
+                          minLines: 1,
+                          textAlign: TextAlign.left,
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 16),
                     const Text('Kết quả dịch:', style: TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
-                    Text(_realtimeTranslatedText, style: const TextStyle(fontSize: 16)),
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 80),
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.yellow[50],
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: SingleChildScrollView(
+                        child: SelectableText(
+                          _realtimeTranslatedText,
+                          style: const TextStyle(fontSize: 16, color: Colors.deepPurple),
+                          maxLines: 4,
+                          minLines: 1,
+                          textAlign: TextAlign.left,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
